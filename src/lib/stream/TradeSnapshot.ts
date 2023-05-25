@@ -1,17 +1,18 @@
-import { Snapshot, Trade } from '@phoobynet/alpaca-services'
+import { Snapshot } from '@phoobynet/alpaca-services'
 import numeral from 'numeral'
 import { TradeSnapshotView } from '@/lib/stream/TradeSnapshotView'
+import { TradeMessage } from '@/lib/stream/AlpacaStream'
 
 export class TradeSnapshot {
   get symbol(): string {
-    return this?._trade?.S ?? this?._snapshot?.symbol ?? ''
+    return this.trade?.S ?? this?._snapshot?.symbol ?? ''
   }
 
-  get trade(): Trade | undefined {
+  get trade(): TradeMessage | undefined {
     return this._trade
   }
 
-  set trade(trade: Trade | undefined) {
+  set trade(trade: TradeMessage | undefined) {
     this._trade = trade
     this.update()
   }
@@ -62,7 +63,7 @@ export class TradeSnapshot {
   private _percentChange: number = 0
   private _multiplier: number = 0
   private _signSymbol: string = 'UNCH'
-  private _trade?: Trade
+  private _trade?: TradeMessage
   private _snapshot?: Snapshot
 
   get previousClosingPrice(): number {
@@ -84,7 +85,7 @@ export class TradeSnapshot {
       return
     }
 
-    this._amountChange = this._trade.p - this.previousClosingPrice
+    this._amountChange = this.trade!.p - this.previousClosingPrice
     this._percentChange = this._amountChange / this.previousClosingPrice
     this._multiplier =
       this._amountChange > 0 ? 1 : this._amountChange < 0 ? -1 : 0
@@ -95,12 +96,12 @@ export class TradeSnapshot {
   }
 
   toView(): TradeSnapshotView | undefined {
-    if (!this._trade || !this._snapshot) {
+    if (!this.trade || !this._snapshot) {
       return undefined
     }
 
     return {
-      ...this._trade,
+      ...this.trade,
       signSymbol: this.signSymbol,
       multiplier: this.multiplier,
       percentChange: this.percentChange,

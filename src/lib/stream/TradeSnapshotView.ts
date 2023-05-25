@@ -1,6 +1,6 @@
-import { Trade } from '@phoobynet/alpaca-services'
+import { TradeMessage } from '@/lib/stream/AlpacaStream'
 
-export interface TradeSnapshotView extends Trade {
+export interface TradeSnapshotView extends TradeMessage {
   signSymbol: string
   multiplier: number
   percentChange: number

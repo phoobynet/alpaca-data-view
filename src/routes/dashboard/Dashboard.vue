@@ -9,59 +9,6 @@ import {
   TradeStreamWorkerResponse,
   TradeStreamWorkerResponseType,
 } from '@/lib/workers/tradeStreamWorker'
-import { Env, getEnv } from '@/lib/env'
-import { TradeSnapshotView } from '@/lib/stream/TradeSnapshotView'
-
-const tradeSnapshots = reactive<Record<string, TradeSnapshotView>>({})
-const tradeStreamWorkerStatus = ref<'connecting' | 'connected'>()
-
-const tradeStreamWorker = new Worker(
-  new URL('@/lib/workers/tradeStreamWorker.ts', import.meta.url),
-  { type: 'module' },
-)
-
-const connect = () => {
-  tradeStreamWorker.postMessage({
-    type: TradeStreamWorkerRequestType.credentials,
-    payload: getEnv(),
-  } satisfies TradeStreamWorkerRequest<Env>)
-}
-
-const subscribeTo = (symbol: string) => {
-  tradeStreamWorker.postMessage({
-    type: TradeStreamWorkerRequestType.subscribe,
-    payload: symbol,
-  } satisfies TradeStreamWorkerRequest<string>)
-}
-
-const unsubscribeFrom = (symbol: string) => {
-  tradeStreamWorker.postMessage({
-    type: TradeStreamWorkerRequestType.unsubscribe,
-    payload: symbol,
-  } satisfies TradeStreamWorkerRequest<string>)
-}
-
-const unsubscribeAll = () => {
-  tradeStreamWorker.postMessage({
-    type: TradeStreamWorkerRequestType.unsubscribeAll,
-  } satisfies TradeStreamWorkerRequest<undefined>)
-}
-
-tradeStreamWorker.onmessage = (event: MessageEvent) => {
-  const message = event.data as TradeStreamWorkerResponse<any>
-
-  switch (message.type) {
-    case TradeStreamWorkerResponseType.connected:
-      tradeStreamWorkerStatus.value = 'connected'
-      break
-    case TradeStreamWorkerResponseType.tradeSnapshot:
-      const t = message.payload as TradeSnapshotView
-      if (t?.S) {
-        tradeSnapshots[t.S] = t
-      }
-      break
-  }
-}
 
 const onSymbol = async (symbol: string) => {
   const selectedAsset = await database.selectedAssets

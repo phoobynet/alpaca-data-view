@@ -1,9 +1,5 @@
-import { AlpacaStream } from '@/lib/stream/AlpacaStream'
-
-interface MessageData {
-  type: string
-  payload: any
-}
+import { AlpacaStream, AlpacaStreamEvent } from '@/lib/stream/AlpacaStream'
+import { MessageData } from '@/lib/stream/messageData'
 
 let alpacaStream: AlpacaStream | undefined
 
@@ -14,35 +10,39 @@ self.onmessage = async (message: MessageEvent) => {
     alpacaStream?.disconnect()
     alpacaStream = new AlpacaStream(data.payload)
 
-    alpacaStream.addEventListener('ready', () => {
-      self.postMessage({ type: 'ready' })
+    alpacaStream.addEventListener(AlpacaStreamEvent.ready, () => {
+      self.postMessage({ type: AlpacaStreamEvent.ready })
     })
 
-    alpacaStream.addEventListener('error', (event: Event) => {
+    alpacaStream.addEventListener(AlpacaStreamEvent.error, (event: Event) => {
       self.postMessage({
-        type: 'error',
+        type: AlpacaStreamEvent.error,
         payload: (event as CustomEvent).detail,
       })
     })
 
-    alpacaStream.addEventListener('trade', (event: Event) => {
+    alpacaStream.addEventListener(AlpacaStreamEvent.trade, (event: Event) => {
       self.postMessage({
-        type: 'trade',
+        type: AlpacaStreamEvent.trade,
         payload: (event as CustomEvent).detail,
       })
     })
 
-    alpacaStream.addEventListener('disconnected', () => {
+    alpacaStream.addEventListener(AlpacaStreamEvent.disconnected, () => {
       self.postMessage({
-        type: 'disconnected',
+        type: AlpacaStreamEvent.disconnected,
       })
     })
 
     alpacaStream.connect()
-  } else if (data.type === 'subscription') {
-    alpacaStream?.subscribe(data.payload)
-  } else if (data.type === 'unsubscribed') {
-    alpacaStream?.unsubscribe(data.payload)
+  } else if (data.type === 'subscribe') {
+    alpacaStream?.subscribe({
+      trades: data.payload as string[],
+    })
+  } else if (data.type === 'unsubscribe') {
+    alpacaStream?.unsubscribe({
+      trades: data.payload as string[],
+    })
   } else if (data.type === 'disconnect') {
     alpacaStream?.disconnect()
   }
