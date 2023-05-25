@@ -1,5 +1,7 @@
 import { TradeStream } from '@/lib/stream'
 import { options, Snapshot, Trade } from '@phoobynet/alpaca-services'
+import { TradeSnapshot } from '@/lib/stream/TradeSnapshot'
+import { TradeSnapshotView } from '@/lib/stream/TradeSnapshotView'
 
 export enum TradeStreamWorkerRequestType {
   credentials = 'credentials',
@@ -15,7 +17,7 @@ export interface TradeStreamWorkerRequest<T> {
 
 export enum TradeStreamWorkerResponseType {
   connected = 'connected',
-  trade = 'trade',
+  tradeSnapshot = 'tradeSnapshot',
   snapshots = 'snapshots',
 }
 
@@ -26,12 +28,12 @@ export interface TradeStreamWorkerResponse<T> {
 
 let tradeStream: TradeStream | undefined
 
-const onTradeHandler = (event: Event) => {
-  const trade = (event as CustomEvent<Trade>).detail
+const onTradeSnapshotHandler = (event: Event) => {
+  const tradeSnapshot = (event as CustomEvent<TradeSnapshotView>).detail
 
   self.postMessage({
-    type: 'trade',
-    payload: trade,
+    type: 'tradeSnapshot',
+    payload: tradeSnapshot,
   })
 }
 
@@ -69,7 +71,7 @@ self.onmessage = async (event: MessageEvent) => {
       })
 
       tradeStream = new TradeStream()
-      tradeStream.addEventListener('trade', onTradeHandler)
+      tradeStream.addEventListener('tradeSnapshot', onTradeSnapshotHandler)
       tradeStream.addEventListener('unsubscribed', unsubscribedHandler)
       tradeStream.addEventListener('snapshots', snapshotsHandler)
       self.postMessage({
@@ -78,7 +80,7 @@ self.onmessage = async (event: MessageEvent) => {
       break
     case TradeStreamWorkerRequestType.unsubscribeAll:
       tradeStream?.unsubscribeAll()
-      tradeStream?.removeEventListener('trade', onTradeHandler)
+      tradeStream?.removeEventListener('tradeSnapshot', onTradeSnapshotHandler)
       tradeStream?.removeEventListener('unsubscribed', unsubscribedHandler)
       tradeStream?.removeEventListener('snapshots', snapshotsHandler)
       tradeStream = undefined

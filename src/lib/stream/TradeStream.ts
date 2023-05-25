@@ -3,15 +3,19 @@ import {
   getLatestTrade,
   getMultiSnapshot,
   observeTrades,
-  Snapshot,
   Trade,
 } from '@phoobynet/alpaca-services'
 import { throttle } from 'lodash-es'
 import { database } from '@/lib/database'
 import { getSeconds } from 'date-fns'
+import { TradeSnapshot } from '@/lib/stream/TradeSnapshot'
+import { TradeSnapshotView } from '@/lib/stream/TradeSnapshotView'
+
+let webSocket: WebSocket | undefined
 
 export class TradeStream extends EventTarget {
   private symbols: Map<string, CancelFn> = new Map<string, CancelFn>()
+  private tradeSnapshots = new Map<string, TradeSnapshot>()
   private interval!: ReturnType<typeof setInterval> | undefined
 
   public constructor(private throttle = 500) {
@@ -26,17 +30,23 @@ export class TradeStream extends EventTarget {
         symbols,
       })
 
-      this.dispatchEvent(
-        new CustomEvent<Record<string, Snapshot>>('snapshots', {
-          detail: snapshots,
-        }),
-      )
-    } else {
-      this.dispatchEvent(
-        new CustomEvent<Record<string, Snapshot>>('snapshots', {
-          detail: {},
-        }),
-      )
+      for (const symbol of Object.keys(snapshots)) {
+        const snapshot = snapshots[symbol]
+        let tradeSnapshot = this.tradeSnapshots.get(symbol)
+
+        if (tradeSnapshot) {
+          tradeSnapshot.snapshot = snapshot
+        } else {
+          tradeSnapshot = new TradeSnapshot()
+          tradeSnapshot.snapshot = snapshot
+          this.tradeSnapshots.set(symbol, tradeSnapshot)
+        }
+        this.dispatchEvent(
+          new CustomEvent<TradeSnapshotView>('tradeSnapshot', {
+            detail: tradeSnapshot.toView(),
+          }),
+        )
+      }
     }
   }
 
@@ -46,10 +56,19 @@ export class TradeStream extends EventTarget {
     // initial trade
     try {
       const latestTrade = await getLatestTrade(symbol)
+      let tradeSnapshot = this.tradeSnapshots.get(symbol)
+
+      if (tradeSnapshot) {
+        tradeSnapshot.trade = latestTrade
+      } else {
+        tradeSnapshot = new TradeSnapshot()
+        tradeSnapshot.trade = latestTrade
+        this.tradeSnapshots.set(symbol, tradeSnapshot)
+      }
 
       this.dispatchEvent(
-        new CustomEvent<Trade>('trade', {
-          detail: latestTrade,
+        new CustomEvent<TradeSnapshotView>('tradeSnapshot', {
+          detail: tradeSnapshot.toView(),
         }),
       )
 
@@ -64,9 +83,19 @@ export class TradeStream extends EventTarget {
       const cancel = await observeTrades(
         symbol,
         throttle(trade => {
+          let tradeSnapshot = this.tradeSnapshots.get(symbol)
+
+          if (tradeSnapshot) {
+            tradeSnapshot.trade = trade
+          } else {
+            tradeSnapshot = new TradeSnapshot()
+            tradeSnapshot.trade = trade
+            this.tradeSnapshots.set(symbol, tradeSnapshot)
+          }
+
           this.dispatchEvent(
-            new CustomEvent('trade', {
-              detail: trade,
+            new CustomEvent<TradeSnapshotView>('tradeSnapshot', {
+              detail: tradeSnapshot.toView(),
             }),
           )
         }, this.throttle),
@@ -87,6 +116,7 @@ export class TradeStream extends EventTarget {
     // cancelling
     cancel()
     this.symbols.delete(symbol)
+    this.tradeSnapshots.delete(symbol)
 
     this.dispatchEvent(
       new CustomEvent<{ symbol: string }>('unsubcribed', {

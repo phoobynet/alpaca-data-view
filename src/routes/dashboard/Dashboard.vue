@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import AssetSearch from '@/components/AssetSearch.vue'
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
-import { Snapshot, Trade } from '@phoobynet/alpaca-services'
+import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { database } from '@/lib/database'
 import DashboardCard from '@/routes/dashboard/DashboardCard.vue'
 import {
@@ -11,9 +10,9 @@ import {
   TradeStreamWorkerResponseType,
 } from '@/lib/workers/tradeStreamWorker'
 import { Env, getEnv } from '@/lib/env'
+import { TradeSnapshotView } from '@/lib/stream/TradeSnapshotView'
 
-const trades = reactive<Record<string, Trade>>({})
-const snapshots = ref<Record<string, Snapshot>>({})
+const tradeSnapshots = reactive<Record<string, TradeSnapshotView>>({})
 const tradeStreamWorkerStatus = ref<'connecting' | 'connected'>()
 
 const tradeStreamWorker = new Worker(
@@ -55,21 +54,14 @@ tradeStreamWorker.onmessage = (event: MessageEvent) => {
     case TradeStreamWorkerResponseType.connected:
       tradeStreamWorkerStatus.value = 'connected'
       break
-    case TradeStreamWorkerResponseType.trade:
-      const t = message.payload as Trade
+    case TradeStreamWorkerResponseType.tradeSnapshot:
+      const t = message.payload as TradeSnapshotView
       if (t?.S) {
-        trades[t.S] = t
+        tradeSnapshots[t.S] = t
       }
-      break
-    case TradeStreamWorkerResponseType.snapshots:
-      snapshots.value = message.payload as Record<string, Snapshot>
       break
   }
 }
-
-const tradesList = computed(() => {
-  return Object.values(trades)
-})
 
 const onSymbol = async (symbol: string) => {
   const selectedAsset = await database.selectedAssets
@@ -114,11 +106,10 @@ onBeforeUnmount(async () => {
     <main>
       <div class="cards">
         <DashboardCard
-          v-for="(trade, index) in tradesList"
-          :key="index"
-          :trade="trade"
-          :snapshot="!snapshots ? undefined : snapshots[trade.S]"
-          @delete="(symbol: string) => onRemoveSymbol(symbol)"
+          v-for="(tradeSnapshotView, symbol) in tradeSnapshots"
+          :key="symbol"
+          :trade-snapshot-view="tradeSnapshotView"
+          @delete="(deleteSymbol: string) => onRemoveSymbol(deleteSymbol)"
         />
       </div>
     </main>

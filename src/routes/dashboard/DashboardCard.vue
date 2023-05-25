@@ -1,71 +1,26 @@
 <script setup lang="ts">
-import { Asset, getAsset, Snapshot, Trade } from '@phoobynet/alpaca-services'
-import { computed, ref, watch } from 'vue'
-import numeral from 'numeral'
-import { numberDiff } from '@/lib/numberDiff'
+import { Asset, getAsset } from '@phoobynet/alpaca-services'
+import { ref, toRefs, watch } from 'vue'
 import { useElementHover } from '@vueuse/core'
-import { Close } from '@vicons/carbon'
+import { Close, CaretDown, CaretUp } from '@vicons/carbon'
 import { Icon } from '@vicons/utils'
+import { TradeSnapshotView } from '@/lib/stream/TradeSnapshotView'
 
-const props = defineProps<{ trade: Trade; snapshot?: Snapshot }>()
+const props = defineProps<{ tradeSnapshotView: TradeSnapshotView }>()
 const emit = defineEmits(['delete'])
 const asset = ref<Asset>()
-const date = new Date()
-const isoDate = date.toISOString().substring(0, 10)
 const card = ref<HTMLDivElement | null>(null)
+
+const { tradeSnapshotView: view } = toRefs(props)
 
 const isHovered = useElementHover(card)
 
-const priceFormatted = computed(() => {
-  return numeral(props.trade.p).format('$0,0.00')
-})
-
-const priceDiff = computed(() => {
-  if (
-    !props.snapshot?.prevDailyBar ||
-    !props.snapshot?.dailyBar ||
-    !props.trade
-  ) {
-    return undefined
-  }
-
-  let closingPrice: number
-
-  if (props.snapshot.dailyBar.t.substring(0, 10) === isoDate) {
-    closingPrice = props.snapshot.prevDailyBar.c
-  } else {
-    closingPrice = props.snapshot.dailyBar.c
-  }
-
-  return numberDiff(closingPrice, props.trade.p)
-})
-
-const priceChangeFormatted = computed(() => {
-  const diff = priceDiff.value
-
-  if (diff === undefined) {
-    return undefined
-  }
-
-  return numeral(diff.change).format('$0,0.00')
-})
-
-const pctChangeFormatted = computed(() => {
-  const diff = priceDiff.value
-
-  if (diff === undefined) {
-    return undefined
-  }
-
-  return numeral(diff.changePercent).format('0,0.00%')
-})
-
 const onDelete = () => {
-  emit('delete', props.trade.S)
+  emit('delete', props.tradeSnapshotView?.symbol)
 }
 
 watch(
-  () => props.trade.S,
+  () => view.value?.S,
   async (newValue, oldValue) => {
     if (newValue !== oldValue && newValue) {
       asset.value = await getAsset(newValue)
@@ -81,20 +36,31 @@ watch(
   <div
     ref="card"
     class="dashboard-card"
-    :data-up="priceDiff?.sign === 1"
-    :data-down="priceDiff?.sign === -1"
-    v-if="trade && asset && snapshot"
+    :data-multiplier="tradeSnapshotView?.multiplier"
+    v-if="tradeSnapshotView && asset"
   >
     <div class="name">{{ asset.name }}</div>
     <div class="symbol">{{ asset.symbol }}</div>
-    <div class="price">{{ priceFormatted }}</div>
+    <div class="price">{{ view.tradePriceFormatted }}</div>
     <div class="change">
-      <div class="price-change">{{ priceChangeFormatted }}</div>
-      <div class="pct-change">{{ pctChangeFormatted }}</div>
+      <div v-if="view.multiplier === 1">
+        <Icon :size="24" class="-translate-y-[1px]">
+          <CaretUp />
+        </Icon>
+      </div>
+      <div v-if="view.multiplier === -1" class="-translate-y-[3px]">
+        <Icon :size="24">
+          <CaretDown />
+        </Icon>
+      </div>
+      <div class="price-change">
+        {{ view.amountChangeFormattedAbsolute }}
+      </div>
+      <div class="pct-change">({{ view.percentChangeFormattedAbsolute }})</div>
     </div>
     <Transition>
-      <div class="overlay" v-if="isHovered">
-        <Icon :size="36" class="text-red-500" @click="onDelete">
+      <div class="overlay" v-if="isHovered" @click="onDelete">
+        <Icon :size="36" class="text-red-500">
           <Close />
         </Icon>
       </div>
@@ -113,12 +79,20 @@ watch(
     '. change change'
     'delete-btn delete-btn delete-btn';
 
-  &[data-up='true'] {
+  &[data-multiplier='1'] {
     @apply border-green-500 border-r-16;
+
+    .change {
+      @apply text-green-400 font-light;
+    }
   }
 
-  &[data-down='true'] {
+  &[data-multiplier='-1'] {
     @apply border-red-500 border-r-16;
+
+    .change {
+      @apply text-red-400 font-light;
+    }
   }
 
   .name {
@@ -132,7 +106,7 @@ watch(
   }
 
   .change {
-    @apply flex gap-1 justify-end;
+    @apply flex gap-1 justify-end text-sm;
     grid-area: change;
 
     &.up {
@@ -148,7 +122,7 @@ watch(
     .pct-change {
       grid-area: pct-change;
       justify-self: end;
-      @apply tabular-nums;
+      @apply tabular-nums font-bold tracking-wider;
     }
   }
 
@@ -166,7 +140,7 @@ watch(
   }
 
   .overlay {
-    @apply absolute w-full h-full top-0 left-0 bg-red-500 bg-opacity-50 overflow-clip flex items-center justify-center rounded;
+    @apply absolute w-full h-full top-0 left-0 bg-black bg-opacity-80 overflow-clip flex items-center justify-center rounded;
   }
 
   .v-enter-active,
